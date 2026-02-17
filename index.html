@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игра Пазл (9x6)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #e67e22;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #d35400;
+        }
+
+        .game-container {
+            position: relative;
+            /* Размер поля 9 * 50 = 450px, 6 * 50 = 300px */
+            width: 450px;
+            height: 300px;
+            background-color: #34495e;
+            border: 5px solid #ecf0f1;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            display: grid;
+            /* Сетка 9 колонок на 6 рядов */
+            grid-template-columns: repeat(9, 50px);
+            grid-template-rows: repeat(6, 50px);
+            gap: 1px;
+            /* Небольшой зазор между кусочками */
+        }
+
+        .tile {
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            background-repeat: no-repeat;
+            transition: transform 0.2s, border 0.2s;
+            box-sizing: border-box;
+        }
+
+        .tile:hover {
+            transform: scale(1.05);
+            z-index: 10;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Стиль для выбранного кусочка */
+        .tile.selected {
+            border: 3px solid #f1c40f;
+            transform: scale(0.95);
+            z-index: 20;
+            box-shadow: 0 0 15px #f1c40f;
+        }
+
+        /* Сообщение о победе */
+        #message {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #2ecc71;
+            height: 30px;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* Подсказка (оригинал) */
+        .preview-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .preview-img {
+            width: 225px;
+            /* Уменьшенная копия для превью */
+            height: 150px;
+            border: 2px solid white;
+            display: none;
+            /* Скрыто по умолчанию */
+        }
+
+        .show-preview .preview-img {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Собери Пазл</h1>
+
+    <div class="controls">
+        <button onclick="shuffleGame()">Перемешать</button>
+        <button onclick="togglePreview()">Показать оригинал</button>
+        <span id="moves">Ходов: 0</span>
+    </div>
+
+    <div class="game-container" id="board">
+        <!-- Тайлы будут созданы через JS -->
+    </div>
+
+    <div id="message"></div>
+
+    <div class="preview-container" id="preview-box">
+        <p style="font-size: 12px; color: #bdc3c7;">Оригинал:</p>
+        <img src="" alt="Preview" class="preview-img" id="preview-image">
+    </div>
+
+    <script>
+        // --- КОНФИГУРАЦИЯ ---
+        const IMG_URL = 'https://cdn.ananasposter.ru/image/cache/catalog/poster/travel/81/20759-1000x830.jpg'; // Пейзаж 450x300 (пропорции 3:2)
+        const BOARD_WIDTH = 450;
+        const BOARD_HEIGHT = 300;
+        const TILE_SIZE = 50;
+
+        const COLS = BOARD_WIDTH / TILE_SIZE; // 9
+        const ROWS = BOARD_HEIGHT / TILE_SIZE; // 6
+        const TOTAL_TILES = COLS * ROWS; // 54
+
+        // --- СОСТОЯНИЕ ---
+        let tiles = []; // Массив объектов { originalIndex, currentPos }
+        let selectedTileIndex = -1;
+        let moves = 0;
+        let isGameActive = true;
+
+        const boardElement = document.getElementById('board');
+        const messageElement = document.getElementById('message');
+        const movesElement = document.getElementById('moves');
+        const previewImage = document.getElementById('preview-image');
+
+        // --- ИНИЦИАЛИЗАЦИЯ ---
+        function initGame() {
+            // Очищаем доску
+            boardElement.innerHTML = '';
+            tiles = [];
+            moves = 0;
+            movesElement.textContent = `Ходов: ${moves}`;
+            messageElement.textContent = '';
+            isGameActive = true;
+            selectedTileIndex = -1;
+            previewImage.src = IMG_URL;
+
+            // Создаем массив индексов [0, 1, 2, ... 53]
+            for (let i = 0; i < TOTAL_TILES; i++) {
+                tiles.push(i);
+            }
+
+            renderBoard();
+        }
+
+        // --- ОТРИСОВКА ---
+        function renderBoard() {
+            boardElement.innerHTML = '';
+
+            tiles.forEach((originalIndex, currentIndex) => {
+                const tile = document.createElement('div');
+                tile.classList.add('tile');
+
+                // Вычисляем координаты оригинального куска для background-position
+                const origRow = Math.floor(originalIndex / COLS);
+                const origCol = originalIndex % COLS;
+
+                const posX = -origCol * TILE_SIZE;
+                const posY = -origRow * TILE_SIZE;
+
+                tile.style.backgroundImage = `url('${IMG_URL}')`;
+                tile.style.backgroundPosition = `${posX}px ${posY}px`;
+                tile.style.backgroundSize = `${BOARD_WIDTH}px ${BOARD_HEIGHT}px`;
+
+                // Обработчик клика
+                tile.onclick = () => handleTileClick(currentIndex);
+
+                // Подсветка выбранного
+                if (currentIndex === selectedTileIndex) {
+                    tile.classList.add('selected');
+                }
+
+                boardElement.appendChild(tile);
+            });
+        }
+
+        // --- ЛОГИКА ИГРЫ ---
+
+        function handleTileClick(index) {
+            if (!isGameActive) return;
+
+            if (selectedTileIndex === -1) {
+                // Первый клик: выбираем тайл
+                selectedTileIndex = index;
+                renderBoard();
+            } else if (selectedTileIndex === index) {
+                // Кликнули по тому же самому: снимаем выделение
+                selectedTileIndex = -1;
+                renderBoard();
+            } else {
+                // Второй клик: меняем местами
+                swapTiles(selectedTileIndex, index);
+                selectedTileIndex = -1;
+                moves++;
+                movesElement.textContent = `Ходов: ${moves}`;
+                renderBoard();
+                checkWin();
+            }
+        }
+
+        function swapTiles(idx1, idx2) {
+            // Меняем местами значения в массиве tiles
+            const temp = tiles[idx1];
+            tiles[idx1] = tiles[idx2];
+            tiles[idx2] = temp;
+        }
+
+        function shuffleGame() {
+            // Алгоритм Фишера-Йетса для перемешивания
+            for (let i = tiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+            }
+
+            // Гарантируем, что пазл не собран случайно сразу после перемешивания
+            // (простая проверка: если массив отсортирован, меняем первые два)
+            if (checkIfSorted()) {
+                swapTiles(0, 1);
+            }
+
+            moves = 0;
+            movesElement.textContent = `Ходов: ${moves}`;
+            messageElement.textContent = '';
+            isGameActive = true;
+            selectedTileIndex = -1;
+            renderBoard();
+        }
+
+        function checkWin() {
+            if (checkIfSorted()) {
+                isGameActive = false;
+                messageElement.textContent = '🎉 Поздравляю! Пазл собран!';
+                // Убираем зазоры для красоты в конце
+                boardElement.style.gap = '0px';
+                const allTiles = document.querySelectorAll('.tile');
+                allTiles.forEach(t => t.style.border = 'none');
+            }
+        }
+
+        function checkIfSorted() {
+            for (let i = 0; i < tiles.length; i++) {
+                if (tiles[i] !== i) return false;
+            }
+            return true;
+        }
+
+        function togglePreview() {
+            document.body.classList.toggle('show-preview');
+        }
+
+        // Запуск при загрузке
+        // Ждем загрузки картинки, чтобы фон отрисовался корректно (опционально)
+        const imgLoader = new Image();
+        imgLoader.src = IMG_URL;
+        imgLoader.onload = initGame;
+
+    </script>
+</body>
+
+</html>
